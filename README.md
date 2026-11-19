@@ -1,6 +1,6 @@
 # workbuddy_auto_checkin
 
-WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派猫猫旅行并领回礼物**，结果推送到飞书。
+WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派猫猫旅行并领回礼物**。GitHub Actions 版支持飞书和钉钉推送，WPS 版仍只支持飞书。
 
 跑在 GitHub Actions 上，按 cron 每天定时执行，不需要任何常开设备。
 
@@ -11,7 +11,7 @@ WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派�
 > | 适合 | 习惯 GitHub 的用户 | **不想碰 GitHub / 零命令行** 的用户 |
 > | 托管 | GitHub Actions 免费定时任务 | 金山文档智能表格脚本 + 免费定时任务 |
 > | 配置 | Fork 仓库 + 填两个 Secret | 建表格 → 粘脚本 → 填两个单元格 |
-> | 结果 | Actions 日志 / 飞书卡片 | 直接回写表格 / 飞书卡片 |
+> | 结果 | Actions 日志 / 飞书卡片 / 钉钉消息 | 直接回写表格 / 飞书卡片 |
 >
 > 两种版本的 token 都由本机导出一次（[第 4 步](#第-4-步导出登录凭证二选一)）：
 > 装了 Python 就跑 `refresh_token.py`；没装 Python 直接下载仓库里的
@@ -57,7 +57,7 @@ WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派�
 
 - 一个 GitHub 账号
 - 一台装过 WorkBuddy **并且登录过**的电脑（只在配置时用一次）
-- 一个飞书群（自己建一个只有自己的也行），用来收消息
+- 可选：已配置自定义机器人的飞书群或钉钉群，用来收消息
 - 电脑上有 Python 3.8+（没有也行——用仓库里的 `refresh_token.exe`，见第 4 步）
 
 ### 容易搞混的一点，先说清楚
@@ -90,11 +90,10 @@ WorkBuddy「Buddy 加油站」的每日自动化：**签到领积分**、**派�
 - 网页下载：你的仓库页 → 绿色 **Code** 按钮 → **Download ZIP** → 解压
 - 或用 git：`git clone https://github.com/FXmonkey/workbuddy_auto_checkin.git`
 
-### 第 3 步：拿一个飞书机器人地址
+### 第 3 步：准备群机器人地址（可选）
 
-1. 在飞书里建一个群（只有你自己也行）
-2. 群设置 → **群机器人** → **添加机器人** → **自定义机器人**
-3. 复制它给你的地址，形如 `https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx`
+- **飞书**：在群设置 → **群机器人** → **添加机器人** → **自定义机器人**，复制机器人 Webhook。
+- **钉钉**：使用已有的群自定义机器人，安全设置选**自定义关键词**，填入 `每日分析报告`，复制完整 Webhook（含 `access_token`）。每条钉钉消息都会包含该关键词；本实现不支持加签模式。
 
 ### 第 4 步：导出登录凭证（二选一）
 
@@ -127,30 +126,28 @@ python refresh_token.py
 
 
 
-### 第 5 步：把两个 Secret 填进仓库
+### 第 5 步：在仓库配置 Actions Secrets
 
 打开**你自己的仓库** → **Settings** → 左侧 **Secrets and variables** → **Actions** → 点绿色的 **New repository secret**：
 
 ![](assets/github_配置action的飞书、wb_access_token.png)
 
-需要填两条：
-
 | Name | Secret 里填什么 |
 | --- | --- |
-| `WB_ACCESS_TOKEN` | 第 4 步方式 B 复制的那串字符 |
-| `FEISHU_WEBHOOK` | 第 3 步拿到的飞书机器人地址 |
+| `WB_ACCESS_TOKEN` | 必填。方式 A 已写入时无需再填 |
+| `FEISHU_WEBHOOK` | 可选，飞书机器人地址 |
+| `DINGDING_WEBHOOK` | 可选，钉钉机器人地址 |
 
-> 方式 A 已经自动写入 `WB_ACCESS_TOKEN` 的，这里只需要再填 `FEISHU_WEBHOOK` 一条。
-> 填完这个页面应该能看到两条记录（如上面截图所示）。
+> 只配置一个 Webhook 就只发对应的平台；两个都配就分别发送；都不配则只记录结果。不要把 Webhook 写进源码或日志。
 
 ### 第 6 步：手动跑一次验证
 
 1. 打开你的仓库 → 点上方 **Actions** 页签
 2. 左侧选 **Buddy 加油站每日自动化**
 3. 右侧点 **Run workflow** 下拉，再点绿色的 **Run workflow**
-4. 等十几秒，刷新页面，飞书应该收到一条消息
+4. 查看运行摘要中的飞书、钉钉推送结果，并检查已配置的群是否收到消息。
 
-> 这个页面显示绿色不代表签到一定成功（猫猫出问题不影响整体结论）。**以飞书收到的消息为准。**
+> 绿色勾不代表签到或推送一定成功，请以运行摘要为准。若只想测试钉钉，在本机设置 `DINGDING_WEBHOOK` 后运行 `python wb_auto.py --test-notify`；不需要 WorkBuddy Token，不会执行签到。
 
 ## 配置项
 
@@ -159,7 +156,8 @@ python refresh_token.py
 | 变量 | 必填 | 默认 | 说明 |
 | --- | --- | --- | --- |
 | `WB_ACCESS_TOKEN` | 是 | — | 访问令牌。缺失则直接退出（exit 2） |
-| `FEISHU_WEBHOOK` | 建议 | — | 飞书自定义机器人地址。缺失则不推送，仅打印日志 |
+| `FEISHU_WEBHOOK` | 否 | — | 飞书自定义机器人地址；未配置则跳过飞书 |
+| `DINGDING_WEBHOOK` | 否 | — | 钉钉自定义机器人地址；使用关键词 `每日分析报告`，未配置则跳过钉钉 |
 | `WB_ENDPOINT` | 否 | `https://copilot.tencent.com` | 接口地址 |
 | `WB_RESULT_FILE` | 否 | — | 写入 Markdown 汇总表，供 Actions 的 step summary 使用 |
 
@@ -211,7 +209,7 @@ python refresh_token.py
 | `1` | 签到未达成（猫猫失败不在此列） |
 | `2` | 缺少 `WB_ACCESS_TOKEN` |
 
-workflow 中脚本以 `exit 0` 收尾，只对未完成项发 `::warning::`，因此一次运行显示绿色不代表签到一定成功——**以日志、step summary 与飞书卡片为准**。
+workflow 中脚本以 `exit 0` 收尾，只对未完成项发 `::warning::`，因此一次运行显示绿色不代表签到一定成功——**以日志和运行摘要为准**。
 
 ## 接口
 
